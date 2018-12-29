@@ -48,7 +48,7 @@ namespace gr {
        * class. tnc_nx::nx_decoder::make is the public interface for
        * creating new instances.
        */
-      static sptr make();
+      static sptr make(int framesync, bool beesat_mode);
     };
 
   } // namespace tnc_nx

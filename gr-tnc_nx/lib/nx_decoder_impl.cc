@@ -31,19 +31,19 @@ namespace gr {
   namespace tnc_nx {
 
     nx_decoder::sptr
-    nx_decoder::make() {
-      return gnuradio::get_initial_sptr(new nx_decoder_impl());
+    nx_decoder::make(int framesync, bool beesat_mode) {
+      return gnuradio::get_initial_sptr(new nx_decoder_impl(framesync, beesat_mode));
     }
 
     /*
      * The private constructor
      */
-    nx_decoder_impl::nx_decoder_impl()
+    nx_decoder_impl::nx_decoder_impl(int framesync, bool beesat_mode)
     : gr::block("NX Decoder",
                  gr::io_signature::make(1, 1, sizeof (char)),
                  gr::io_signature::make(0, 0, 0)),
                  d_off(0), header(0), state(SEARCH),
-                 rx(), fr(&rx) {
+                 rx(), fr(&rx), d_framesync(framesync), d_beesat_mode(beesat_mode) {
       /********************************
        * SET UP I/O PORTS AND HANDLER *
        ********************************/
@@ -79,7 +79,7 @@ namespace gr {
     }
 
     void nx_decoder_impl::output_message() {
-      int msg_len = (rx.org.blocks * 18) + 16;
+      int msg_len = (rx.org.blocks * 18) + 8 + (d_beesat_mode ? 8 : 0);
       // create output buffer
       pmt::pmt_t out_vector = pmt::make_u8vector(msg_len, 0);
       // make accessible pointer
@@ -87,8 +87,10 @@ namespace gr {
 
       *out++ = rx.org.control[0];
       *out++ = rx.org.control[1];
-      for (int i = 0; i < 8; ++i)
-        *out++ = rx.callsign[i];
+      if (d_beesat_mode) {
+	for (int i = 0; i < 8; ++i)
+	  *out++ = rx.callsign[i];
+      }
       for (int k = 0; k < rx.org.blocks; ++k)
         for (int i = 0; i < 18; ++i)
           *out++ = rx.mob_data[k][i];
@@ -121,7 +123,7 @@ namespace gr {
           case SEARCH:
             // SEARCH for FRAMESYNC
             header = (header << 1) | (in[i] & 0x01);
-            if (header == FRAMESYNC) {
+            if (header == d_framesync) {
               // set next state;
               state = RX_CTRL;
               rx.clear_head(&rx.cur);
@@ -137,13 +139,14 @@ namespace gr {
           case RX_CFEC:
             if (fr.read_ctrl_fec(in[i])) {
               if (rx.decode_control(&rx.cur)) { // CTRL-FEC OK
-                rx.cur.msg_type = message_type(rx.cur.control); // GET MSG-TYPE
+		if (d_beesat_mode) {
+		  rx.cur.msg_type = message_type(rx.cur.control); // GET MSG-TYPE
 
-                if (check_address(rx.cur.control[1])) { // ADR OK
-                  // TODO: eval msg-type
-                  /*printf("\n****** SYNC! ****** \n");
-		    printf("RX-MSG-TYPE: %02X\n", rx.cur.msg_type);*/
-                  switch (rx.cur.msg_type) {
+		  if (check_address(rx.cur.control[1])) { // ADR OK
+		    // TODO: eval msg-type
+		    /*printf("\n****** SYNC! ****** \n");
+		      printf("RX-MSG-TYPE: %02X\n", rx.cur.msg_type);*/
+		    switch (rx.cur.msg_type) {
                     case T_REG:
                     case T_ECHO:
                       state = RX_CS;
@@ -153,13 +156,26 @@ namespace gr {
                       reset_rx();
                       i = i - (5 * 8) + 5;
                       break;
-                  }
-
-                } else {
-                  //printf("BAD ADR - ctrl: 0x %02X %02X \n", rx.cur.control[0], rx.cur.control[1]);
-                  reset_rx();
-                  i = i - (5 * 8) + 5;
-                }
+		    }
+		    
+		  } else {
+		    //printf("BAD ADR - ctrl: 0x %02X %02X \n", rx.cur.control[0], rx.cur.control[1]);
+		    reset_rx();
+		    i = i - (5 * 8) + 5;
+		  }
+		}
+		else { // D-STAR One Mobitex mode
+		  rx.cur.blocks = rx.cur.control[1];
+		  if (rx.cur.blocks > 20) { // Invalid number of blocks
+		    reset_rx();
+		    i = i - (5 * 8) + 5;
+		  }
+		  else {
+		    state = RX_DATA;
+		    rx.clear_errors();
+		    rx.reset_scrambler();
+		  }
+		}
               } else {
                 //printf("BAD CTRL - ctrl: 0x %02X %02X \n", rx.cur.control[0], rx.cur.control[1]);
                 reset_rx();

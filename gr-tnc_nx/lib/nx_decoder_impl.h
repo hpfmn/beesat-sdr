@@ -51,6 +51,9 @@ namespace gr {
     					SKIP_FH
     	} state;
 
+        int d_framesync;
+        bool d_beesat_mode;
+
     	// reset RX path to search for frame head
     	void reset_rx();
 
@@ -59,7 +62,7 @@ namespace gr {
     	void output_trigger();
 
      public:
-      nx_decoder_impl();
+      nx_decoder_impl(int framesync, bool beesat_mode);
       ~nx_decoder_impl();
 
       int general_work(int noutput_items,

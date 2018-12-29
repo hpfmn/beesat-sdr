@@ -4,8 +4,30 @@
   <key>tnc_nx_nx_decoder</key>
   <category>TNC NX</category>
   <import>import tnc_nx</import>
-  <make>tnc_nx.nx_decoder()</make>
+  <make>tnc_nx.nx_decoder($framesync, $beesat_mode)</make>
 
+  <param>
+    <name>Framesync</name>
+    <key>framesync</key>
+    <value>0x0EF0</value>
+    <type>int</type>
+  </param>
+  
+  <param>
+    <name>BEESAT Mode</name>
+    <key>beesat_mode</key>
+    <value>True</value>
+    <type>bool</type>
+     <option>
+       <name>Yes</name>
+       <key>True</key>
+     </option>
+     <option>
+       <name>No</name>
+       <key>False</key>
+     </option>
+  </param>
+  
   <sink>
     <name>in</name>
     <type>byte</type>
