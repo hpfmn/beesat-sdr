@@ -42,7 +42,7 @@ namespace gr {
     : gr::block("NX Decoder",
                  gr::io_signature::make(1, 1, sizeof (char)),
                  gr::io_signature::make(0, 0, 0)),
-                 d_off(0), header(0), state(SEARCH),
+                 d_off(0), header(0), header_inv(0), state(SEARCH),
                  rx(), fr(&rx), d_framesync(framesync), d_beesat_mode(beesat_mode) {
       /********************************
        * SET UP I/O PORTS AND HANDLER *
@@ -74,6 +74,7 @@ namespace gr {
 
     void nx_decoder_impl::reset_rx() {
       header = 0;
+      header_inv = 0;
       state = SEARCH;
       rx.clear_blocks();
     }
@@ -115,29 +116,45 @@ namespace gr {
             gr_vector_const_void_star &input_items,
             gr_vector_void_star &output_items) {
       const uint8_t *in = (const uint8_t *) input_items[0];
+      uint8_t tmp;
 
       for (int i = 104; i < (noutput_items + 104); ++i) {
+
+        if (d_invert && state != SEARCH) {
+            tmp = in[i] ^ 0x01;
+        }
+        else {
+            tmp = in[i];
+        }
 
         switch (state) {
 
           case SEARCH:
             // SEARCH for FRAMESYNC
-            header = (header << 1) | (in[i] & 0x01);
+            header = (header << 1) | (tmp & 0x01);
+            header_inv = (header_inv << 1) | ((tmp & 0x01) ^ 0x01);
             if (header == d_framesync) {
               // set next state;
               state = RX_CTRL;
               rx.clear_head(&rx.cur);
+              d_invert = false;
+            }
+            else if (header_inv == d_framesync) {
+              // set next state;
+              state = RX_CTRL;
+              rx.clear_head(&rx.cur);
+              d_invert = true;
             }
             break;
 
           case RX_CTRL:
-            if (fr.read_ctrl(in[i])) {
+            if (fr.read_ctrl(tmp)) {
               state = RX_CFEC;
             }
             break;
 
           case RX_CFEC:
-            if (fr.read_ctrl_fec(in[i])) {
+            if (fr.read_ctrl_fec(tmp)) {
               if (rx.decode_control(&rx.cur)) { // CTRL-FEC OK
 		if (d_beesat_mode) {
 		  rx.cur.msg_type = message_type(rx.cur.control); // GET MSG-TYPE
@@ -185,7 +202,7 @@ namespace gr {
             break;
 
           case RX_CS:
-            if (fr.read_callsign(in[i])) {
+            if (fr.read_callsign(tmp)) {
               if (!rx.decode_callsign()) {
                 /*printf("BAD CS\n");
                 printf("CS    : %.*s\n", 6, rx.callsign);
@@ -208,13 +225,13 @@ namespace gr {
             break;
 
           case RX_SDB:
-            if (fr.read_sdb(in[i])) {
+            if (fr.read_sdb(tmp)) {
               reset_rx();
             }
             break;
 
           case RX_DATA:
-            if (fr.read_data(in[i])) {
+            if (fr.read_data(tmp)) {
               // get number and position of errors
               rx.get_errors();
               // copy/save original message header

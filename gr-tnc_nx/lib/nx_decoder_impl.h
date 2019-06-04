@@ -38,6 +38,7 @@ namespace gr {
      private:
     	size_t	 d_off;
     	uint16_t header;
+    	uint16_t header_inv;
 
     	TNC_NX_API mobitex_coding rx;
     	TNC_NX_API frame_composer fr;
@@ -53,6 +54,7 @@ namespace gr {
 
         int d_framesync;
         bool d_beesat_mode;
+        bool d_invert;
 
     	// reset RX path to search for frame head
     	void reset_rx();
