@@ -27,10 +27,9 @@
 
 #include "qa_tnc_nx.h"
 
-CppUnit::TestSuite *
-qa_tnc_nx::suite()
+CppUnit::TestSuite* qa_tnc_nx::suite()
 {
-  CppUnit::TestSuite *s = new CppUnit::TestSuite("tnc_nx");
+	CppUnit::TestSuite* s = new CppUnit::TestSuite("tnc_nx");
 
-  return s;
+	return s;
 }
